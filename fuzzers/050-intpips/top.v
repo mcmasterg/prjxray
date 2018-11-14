@@ -1,11 +1,15 @@
 `include "setseed.vh"
 
-module top(input clk, din, stb, output dout);
-	reg [49:0] din_bits;
-	wire [86:0] dout_bits;
+`define DIN_N 150
+`define DOUT_N 151
 
-	reg [49:0] din_shr;
-	reg [86:0] dout_shr;
+module top(input clk, din, stb, output dout);
+
+    reg [`DIN_N-1:0] din_bits;
+    wire [`DOUT_N-1:0] dout_bits;
+
+    reg [`DIN_N-1:0] din_shr;
+    reg [`DOUT_N-1:0] dout_shr;
 
 	always @(posedge clk) begin
 		if (stb) begin
@@ -26,7 +30,7 @@ module top(input clk, din, stb, output dout);
 	);
 endmodule
 
-module roi(input clk, input [49:0] din_bits, output [86:0] dout_bits);
+module roi(input clk, input [`DIN_N-1:0] din_bits, output [`DOUT_N-1:0] dout_bits);
 	picorv32 picorv32 (
 		.clk(clk),
 		.resetn(din_bits[0]),
@@ -45,8 +49,9 @@ module roi(input clk, input [49:0] din_bits, output [86:0] dout_bits);
 	);
 
 	randbrams randbrams (
-		.din(din_bits[49:42]),
-		.dout(dout_bits[86:79])
+		.clk(clk),
+		.din(din_bits[149:42]),
+		.dout(dout_bits[150:79])
 	);
 endmodule
 
@@ -71,6 +76,14 @@ module randluts(input [7:0] din, output [7:0] dout);
 		end
 	endfunction
 
+    /*
+    Chain luts together
+    din forms seed feeding the first group of luts
+    Eight of these are grouped together to form another group
+    Without k, the first 5/8 would feed to next group
+    However, k adds random offsets that will feed to any 1-5
+    of the previous 8 will get selected as inputs
+    */
 	wire [(N+1)*8-1:0] nets;
 
 	assign nets[7:0] = din;
@@ -81,6 +94,7 @@ module randluts(input [7:0] din, output [7:0] dout);
 		for (i = 0; i < N; i = i+1) begin:is
 			for (j = 0; j < 8; j = j+1) begin:js
 				localparam integer k = xorshift32(xorshift32(xorshift32(xorshift32((i << 20) ^ (j << 10) ^ `SEED)))) & 255;
+				(* KEEP, DONT_TOUCH *)
 				LUT6 #(
 					.INIT(lutinit(i, j))
 				) lut (
@@ -97,162 +111,88 @@ module randluts(input [7:0] din, output [7:0] dout);
 	endgenerate
 endmodule
 
-module randbrams(input [7:0] din, output [7:0] dout);
-    ram_RAMB18E1 #(.LOC("RAMB18_X0Y20")) r0(.clk(clk), .din(din[  0 +: 8]), .dout(dout[  0 +: 8]));
+module randbrams(input wire clk, input [107:0] din, output [71:0] dout);
+	localparam integer N = 10;
+
+	wire [(N+1)*108-1:0] nets;
+
+	assign nets[107:0] = din;
+	assign dout = nets[(N+1)*108-1:N*108];
+
+	function [31:0] xorshift32(input [31:0] xorin);
+		begin
+			xorshift32 = xorin;
+			xorshift32 = xorshift32 ^ (xorshift32 << 13);
+			xorshift32 = xorshift32 ^ (xorshift32 >> 17);
+			xorshift32 = xorshift32 ^ (xorshift32 <<  5);
+		end
+	endfunction
+
+	function [63:0] lutinit(input [7:0] a, b);
+		begin
+			lutinit[63:32] = xorshift32(xorshift32(xorshift32(xorshift32({a, b} ^ `SEED))));
+			lutinit[31: 0] = xorshift32(xorshift32(xorshift32(xorshift32({b, a} ^ `SEED))));
+		end
+	endfunction
+
+	genvar i;
+	generate
+		for (i = 0; i < N; i = i+1) begin:is
+			localparam integer k = xorshift32(xorshift32(xorshift32(xorshift32((i << 20) ^ `SEED)))) & 255;
+			localparam dout_base = 108*i+108;
+			//Leave 1 bit on edges to prevent boundary conditions
+			//XXX: will this loose a pip we need?
+			localparam dout_off = k%(108-72-2) + 1;
+
+			//Randomly assign into next output block so that next input gets something interesting
+            b36_maxwidth b0(.clk(clk), .din(nets[108*i]), .dout(nets[dout_base+dout_off+72-1:dout_base+dout_off]));
+            //Fixes "ERROR: [DRC NDRV-1] Driverless Nets"
+            assign nets[dout_base+dout_off-1:dout_base] = 108'b0;
+            assign nets[dout_base+108-1:dout_base+dout_off+72] = 108'b0;
+        end
+    endgenerate
 endmodule
 
-module ram_RAMB18E1 (input clk, input [7:0] din, output [7:0] dout);
-    parameter LOC = "";
+/*
+36 kb width => 1024 addresses => 10 bit address
+Hook up everything anyway?
+Any restrictions on address bus?
+*/
+module b36_maxwidth(input wire clk, input [107:0] din, output [71:0] dout);
+    (* KEEP, DONT_TOUCH *)
+    RAMB36E1 #(
+            .RAM_MODE("TDP"),
 
-    parameter INIT0 = 256'h0000000000000000000000000000000000000000000000000000000000000000;
-    parameter INIT = 256'h0000000000000000000000000000000000000000000000000000000000000000;
-
-    parameter IS_CLKARDCLK_INVERTED = 1'b0;
-    parameter IS_CLKBWRCLK_INVERTED = 1'b0;
-    parameter IS_ENARDEN_INVERTED = 1'b0;
-    parameter IS_ENBWREN_INVERTED = 1'b0;
-    parameter IS_RSTRAMARSTRAM_INVERTED = 1'b0;
-    parameter IS_RSTRAMB_INVERTED = 1'b0;
-    parameter IS_RSTREGARSTREG_INVERTED = 1'b0;
-    parameter IS_RSTREGB_INVERTED = 1'b0;
-    parameter RAM_MODE = "TDP";
-    parameter WRITE_MODE_A = "WRITE_FIRST";
-    parameter WRITE_MODE_B = "WRITE_FIRST";
-
-    parameter DOA_REG = 1'b0;
-    parameter DOB_REG = 1'b0;
-    parameter SRVAL_A = 18'b0;
-    parameter SRVAL_B = 18'b0;
-    parameter INIT_A = 18'b0;
-    parameter INIT_B = 18'b0;
-
-    parameter READ_WIDTH_A = 0;
-    parameter READ_WIDTH_B = 0;
-    parameter WRITE_WIDTH_A = 0;
-    parameter WRITE_WIDTH_B = 0;
-
-    (* LOC=LOC *)
-    RAMB18E1 #(
-            .INITP_00(INIT),
-            .INITP_01(INIT),
-            .INITP_02(INIT),
-            .INITP_03(INIT),
-            .INITP_04(INIT),
-            .INITP_05(INIT),
-            .INITP_06(INIT),
-            .INITP_07(INIT),
-
-            .INIT_00(INIT0),
-            .INIT_01(INIT),
-            .INIT_02(INIT),
-            .INIT_03(INIT),
-            .INIT_04(INIT),
-            .INIT_05(INIT),
-            .INIT_06(INIT),
-            .INIT_07(INIT),
-            .INIT_08(INIT),
-            .INIT_09(INIT),
-            .INIT_0A(INIT),
-            .INIT_0B(INIT),
-            .INIT_0C(INIT),
-            .INIT_0D(INIT),
-            .INIT_0E(INIT),
-            .INIT_0F(INIT),
-            .INIT_10(INIT),
-            .INIT_11(INIT),
-            .INIT_12(INIT),
-            .INIT_13(INIT),
-            .INIT_14(INIT),
-            .INIT_15(INIT),
-            .INIT_16(INIT),
-            .INIT_17(INIT),
-            .INIT_18(INIT),
-            .INIT_19(INIT),
-            .INIT_1A(INIT),
-            .INIT_1B(INIT),
-            .INIT_1C(INIT),
-            .INIT_1D(INIT),
-            .INIT_1E(INIT),
-            .INIT_1F(INIT),
-            .INIT_20(INIT),
-            .INIT_21(INIT),
-            .INIT_22(INIT),
-            .INIT_23(INIT),
-            .INIT_24(INIT),
-            .INIT_25(INIT),
-            .INIT_26(INIT),
-            .INIT_27(INIT),
-            .INIT_28(INIT),
-            .INIT_29(INIT),
-            .INIT_2A(INIT),
-            .INIT_2B(INIT),
-            .INIT_2C(INIT),
-            .INIT_2D(INIT),
-            .INIT_2E(INIT),
-            .INIT_2F(INIT),
-            .INIT_30(INIT),
-            .INIT_31(INIT),
-            .INIT_32(INIT),
-            .INIT_33(INIT),
-            .INIT_34(INIT),
-            .INIT_35(INIT),
-            .INIT_36(INIT),
-            .INIT_37(INIT),
-            .INIT_38(INIT),
-            .INIT_39(INIT),
-            .INIT_3A(INIT),
-            .INIT_3B(INIT),
-            .INIT_3C(INIT),
-            .INIT_3D(INIT),
-            .INIT_3E(INIT),
-            .INIT_3F(INIT),
-
-            .IS_CLKARDCLK_INVERTED(IS_CLKARDCLK_INVERTED),
-            .IS_CLKBWRCLK_INVERTED(IS_CLKBWRCLK_INVERTED),
-            .IS_ENARDEN_INVERTED(IS_ENARDEN_INVERTED),
-            .IS_ENBWREN_INVERTED(IS_ENBWREN_INVERTED),
-            .IS_RSTRAMARSTRAM_INVERTED(IS_RSTRAMARSTRAM_INVERTED),
-            .IS_RSTRAMB_INVERTED(IS_RSTRAMB_INVERTED),
-            .IS_RSTREGARSTREG_INVERTED(IS_RSTREGARSTREG_INVERTED),
-            .IS_RSTREGB_INVERTED(IS_RSTREGB_INVERTED),
-            .RAM_MODE(RAM_MODE),
-            .WRITE_MODE_A(WRITE_MODE_A),
-            .WRITE_MODE_B(WRITE_MODE_B),
-
-            .DOA_REG(DOA_REG),
-            .DOB_REG(DOB_REG),
-            .SRVAL_A(SRVAL_A),
-            .SRVAL_B(SRVAL_B),
-            .INIT_A(INIT_A),
-            .INIT_B(INIT_B),
-
-            .READ_WIDTH_A(READ_WIDTH_A),
-            .READ_WIDTH_B(READ_WIDTH_B),
-            .WRITE_WIDTH_A(WRITE_WIDTH_A),
-            .WRITE_WIDTH_B(WRITE_WIDTH_B)
+            .READ_WIDTH_A(36),
+            .READ_WIDTH_B(36),
+            .WRITE_WIDTH_A(36),
+            .WRITE_WIDTH_B(36)
         ) ram (
-            .CLKARDCLK(din[0]),
-            .CLKBWRCLK(din[1]),
-            .ENARDEN(din[2]),
-            .ENBWREN(din[3]),
-            .REGCEAREGCE(din[4]),
-            .REGCEB(din[5]),
-            .RSTRAMARSTRAM(din[6]),
-            .RSTRAMB(din[7]),
-            .RSTREGARSTREG(din[0]),
-            .RSTREGB(din[1]),
-            .ADDRARDADDR(din[2]),
-            .ADDRBWRADDR(din[3]),
-            .DIADI(din[4]),
-            .DIBDI(din[5]),
-            .DIPADIP(din[6]),
-            .DIPBDIP(din[7]),
-            .WEA(din[0]),
-            .WEBWE(din[1]),
-            .DOADO(dout[0]),
-            .DOBDO(dout[1]),
-            .DOPADOP(dout[2]),
-            .DOPBDOP(dout[3]));
-
+            .CLKARDCLK(clk),
+            .CLKBWRCLK(clk),
+            .ENARDEN(din[0]),
+            .ENBWREN(din[1]),
+            .REGCEAREGCE(din[2]),
+            .REGCEB(din[3]),
+            .RSTRAMARSTRAM(din[4]),
+            .RSTRAMB(din[5]),
+            .RSTREGARSTREG(din[6]),
+            .RSTREGB(din[7]),
+            //Address
+            .ADDRARDADDR(din[15:8]),
+            .ADDRBWRADDR(din[23:16]),
+            //Data in
+            .DIADI(din[55:24]),
+            .DIBDI(din[87:56]),
+            //Data in (parity)
+            .DIPADIP(din[91:88]),
+            .DIPBDIP(din[95:92]),
+            //Write enable
+            .WEA(din[99:96]),
+            .WEBWE(din[107:100]),
+            .DOADO(dout[31:0]),
+            .DOBDO(dout[63:32]),
+            .DOPADOP(dout[67:64]),
+            .DOPBDOP(dout[71:68]));
 endmodule
 
