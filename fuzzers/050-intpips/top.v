@@ -1,11 +1,11 @@
 `include "setseed.vh"
 
 module top(input clk, din, stb, output dout);
-	reg [41:0] din_bits;
-	wire [78:0] dout_bits;
+	reg [49:0] din_bits;
+	wire [86:0] dout_bits;
 
-	reg [41:0] din_shr;
-	reg [78:0] dout_shr;
+	reg [49:0] din_shr;
+	reg [86:0] dout_shr;
 
 	always @(posedge clk) begin
 		if (stb) begin
@@ -26,7 +26,7 @@ module top(input clk, din, stb, output dout);
 	);
 endmodule
 
-module roi(input clk, input [41:0] din_bits, output [78:0] dout_bits);
+module roi(input clk, input [49:0] din_bits, output [86:0] dout_bits);
 	picorv32 picorv32 (
 		.clk(clk),
 		.resetn(din_bits[0]),
@@ -42,6 +42,11 @@ module roi(input clk, input [41:0] din_bits, output [78:0] dout_bits);
 	randluts randluts (
 		.din(din_bits[41:34]),
 		.dout(dout_bits[78:71])
+	);
+
+	randbrams randbrams (
+		.din(din_bits[49:42]),
+		.dout(dout_bits[86:79])
 	);
 endmodule
 
@@ -91,3 +96,163 @@ module randluts(input [7:0] din, output [7:0] dout);
 		end
 	endgenerate
 endmodule
+
+module randbrams(input [7:0] din, output [7:0] dout);
+    ram_RAMB18E1 #(.LOC("RAMB18_X0Y20")) r0(.clk(clk), .din(din[  0 +: 8]), .dout(dout[  0 +: 8]));
+endmodule
+
+module ram_RAMB18E1 (input clk, input [7:0] din, output [7:0] dout);
+    parameter LOC = "";
+
+    parameter INIT0 = 256'h0000000000000000000000000000000000000000000000000000000000000000;
+    parameter INIT = 256'h0000000000000000000000000000000000000000000000000000000000000000;
+
+    parameter IS_CLKARDCLK_INVERTED = 1'b0;
+    parameter IS_CLKBWRCLK_INVERTED = 1'b0;
+    parameter IS_ENARDEN_INVERTED = 1'b0;
+    parameter IS_ENBWREN_INVERTED = 1'b0;
+    parameter IS_RSTRAMARSTRAM_INVERTED = 1'b0;
+    parameter IS_RSTRAMB_INVERTED = 1'b0;
+    parameter IS_RSTREGARSTREG_INVERTED = 1'b0;
+    parameter IS_RSTREGB_INVERTED = 1'b0;
+    parameter RAM_MODE = "TDP";
+    parameter WRITE_MODE_A = "WRITE_FIRST";
+    parameter WRITE_MODE_B = "WRITE_FIRST";
+
+    parameter DOA_REG = 1'b0;
+    parameter DOB_REG = 1'b0;
+    parameter SRVAL_A = 18'b0;
+    parameter SRVAL_B = 18'b0;
+    parameter INIT_A = 18'b0;
+    parameter INIT_B = 18'b0;
+
+    parameter READ_WIDTH_A = 0;
+    parameter READ_WIDTH_B = 0;
+    parameter WRITE_WIDTH_A = 0;
+    parameter WRITE_WIDTH_B = 0;
+
+    (* LOC=LOC *)
+    RAMB18E1 #(
+            .INITP_00(INIT),
+            .INITP_01(INIT),
+            .INITP_02(INIT),
+            .INITP_03(INIT),
+            .INITP_04(INIT),
+            .INITP_05(INIT),
+            .INITP_06(INIT),
+            .INITP_07(INIT),
+
+            .INIT_00(INIT0),
+            .INIT_01(INIT),
+            .INIT_02(INIT),
+            .INIT_03(INIT),
+            .INIT_04(INIT),
+            .INIT_05(INIT),
+            .INIT_06(INIT),
+            .INIT_07(INIT),
+            .INIT_08(INIT),
+            .INIT_09(INIT),
+            .INIT_0A(INIT),
+            .INIT_0B(INIT),
+            .INIT_0C(INIT),
+            .INIT_0D(INIT),
+            .INIT_0E(INIT),
+            .INIT_0F(INIT),
+            .INIT_10(INIT),
+            .INIT_11(INIT),
+            .INIT_12(INIT),
+            .INIT_13(INIT),
+            .INIT_14(INIT),
+            .INIT_15(INIT),
+            .INIT_16(INIT),
+            .INIT_17(INIT),
+            .INIT_18(INIT),
+            .INIT_19(INIT),
+            .INIT_1A(INIT),
+            .INIT_1B(INIT),
+            .INIT_1C(INIT),
+            .INIT_1D(INIT),
+            .INIT_1E(INIT),
+            .INIT_1F(INIT),
+            .INIT_20(INIT),
+            .INIT_21(INIT),
+            .INIT_22(INIT),
+            .INIT_23(INIT),
+            .INIT_24(INIT),
+            .INIT_25(INIT),
+            .INIT_26(INIT),
+            .INIT_27(INIT),
+            .INIT_28(INIT),
+            .INIT_29(INIT),
+            .INIT_2A(INIT),
+            .INIT_2B(INIT),
+            .INIT_2C(INIT),
+            .INIT_2D(INIT),
+            .INIT_2E(INIT),
+            .INIT_2F(INIT),
+            .INIT_30(INIT),
+            .INIT_31(INIT),
+            .INIT_32(INIT),
+            .INIT_33(INIT),
+            .INIT_34(INIT),
+            .INIT_35(INIT),
+            .INIT_36(INIT),
+            .INIT_37(INIT),
+            .INIT_38(INIT),
+            .INIT_39(INIT),
+            .INIT_3A(INIT),
+            .INIT_3B(INIT),
+            .INIT_3C(INIT),
+            .INIT_3D(INIT),
+            .INIT_3E(INIT),
+            .INIT_3F(INIT),
+
+            .IS_CLKARDCLK_INVERTED(IS_CLKARDCLK_INVERTED),
+            .IS_CLKBWRCLK_INVERTED(IS_CLKBWRCLK_INVERTED),
+            .IS_ENARDEN_INVERTED(IS_ENARDEN_INVERTED),
+            .IS_ENBWREN_INVERTED(IS_ENBWREN_INVERTED),
+            .IS_RSTRAMARSTRAM_INVERTED(IS_RSTRAMARSTRAM_INVERTED),
+            .IS_RSTRAMB_INVERTED(IS_RSTRAMB_INVERTED),
+            .IS_RSTREGARSTREG_INVERTED(IS_RSTREGARSTREG_INVERTED),
+            .IS_RSTREGB_INVERTED(IS_RSTREGB_INVERTED),
+            .RAM_MODE(RAM_MODE),
+            .WRITE_MODE_A(WRITE_MODE_A),
+            .WRITE_MODE_B(WRITE_MODE_B),
+
+            .DOA_REG(DOA_REG),
+            .DOB_REG(DOB_REG),
+            .SRVAL_A(SRVAL_A),
+            .SRVAL_B(SRVAL_B),
+            .INIT_A(INIT_A),
+            .INIT_B(INIT_B),
+
+            .READ_WIDTH_A(READ_WIDTH_A),
+            .READ_WIDTH_B(READ_WIDTH_B),
+            .WRITE_WIDTH_A(WRITE_WIDTH_A),
+            .WRITE_WIDTH_B(WRITE_WIDTH_B)
+        ) ram (
+            .CLKARDCLK(din[0]),
+            .CLKBWRCLK(din[1]),
+            .ENARDEN(din[2]),
+            .ENBWREN(din[3]),
+            .REGCEAREGCE(din[4]),
+            .REGCEB(din[5]),
+            .RSTRAMARSTRAM(din[6]),
+            .RSTRAMB(din[7]),
+            .RSTREGARSTREG(din[0]),
+            .RSTREGB(din[1]),
+            .ADDRARDADDR(din[2]),
+            .ADDRBWRADDR(din[3]),
+            .DIADI(din[4]),
+            .DIBDI(din[5]),
+            .DIPADIP(din[6]),
+            .DIPBDIP(din[7]),
+            .WEA(din[0]),
+            .WEBWE(din[1]),
+            .DOADO(dout[0]),
+            .DOBDO(dout[1]),
+            .DOPADOP(dout[2]),
+            .DOPBDOP(dout[3]));
+
+endmodule
+
